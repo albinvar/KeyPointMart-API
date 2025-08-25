@@ -1,0 +1,60 @@
+version: '3.8'
+
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: keypointmart-api
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=development
+      - MONGODB_URI=mongodb://mongo:27017/keypointmart
+      - JWT_SECRET=keypointmart-jwt-secret-key-2024
+      - PORT=3000
+    depends_on:
+      - mongo
+    volumes:
+      - ./src:/app/src
+      - ./uploads:/app/uploads
+    networks:
+      - keypointmart-network
+
+  mongo:
+    image: mongo:7.0
+    container_name: keypointmart-mongo
+    restart: unless-stopped
+    ports:
+      - "27017:27017"
+    environment:
+      - MONGO_INITDB_DATABASE=keypointmart
+    volumes:
+      - mongo-data:/data/db
+      - ./mongo-init:/docker-entrypoint-initdb.d
+    networks:
+      - keypointmart-network
+
+  mongo-express:
+    image: mongo-express:1.0.2
+    container_name: keypointmart-mongo-express
+    restart: unless-stopped
+    ports:
+      - "8081:8081"
+    environment:
+      - ME_CONFIG_MONGODB_SERVER=mongo
+      - ME_CONFIG_MONGODB_PORT=27017
+      - ME_CONFIG_BASICAUTH_USERNAME=admin
+      - ME_CONFIG_BASICAUTH_PASSWORD=admin123
+    depends_on:
+      - mongo
+    networks:
+      - keypointmart-network
+
+networks:
+  keypointmart-network:
+    driver: bridge
+
+volumes:
+  mongo-data:
