@@ -1,0 +1,402 @@
+const mongoose = require('mongoose');
+
+const orderItemSchema = new mongoose.Schema({
+  product: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Product',
+    required: true
+  },
+  variant: {
+    type: mongoose.Schema.Types.ObjectId,
+    required: false
+  },
+  name: {
+    type: String,
+    required: true
+  },
+  price: {
+    type: Number,
+    required: true,
+    min: 0
+  },
+  quantity: {
+    type: Number,
+    required: true,
+    min: 1
+  },
+  total: {
+    type: Number,
+    required: true,
+    min: 0
+  },
+  shop: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Shop',
+    required: true
+  }
+});
+
+const orderSchema = new mongoose.Schema({
+  orderNumber: {
+    type: String,
+    required: true,
+    unique: true
+  },
+  customer: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User',
+    required: true
+  },
+  shop: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Shop',
+    required: true
+  },
+  
+  // Order items
+  items: [orderItemSchema],
+  
+  // Pricing
+  subtotal: {
+    type: Number,
+    required: true,
+    min: 0
+  },
+  deliveryFee: {
+    type: Number,
+    default: 0,
+    min: 0
+  },
+  tax: {
+    type: Number,
+    default: 0,
+    min: 0
+  },
+  discount: {
+    amount: {
+      type: Number,
+      default: 0,
+      min: 0
+    },
+    code: String,
+    description: String
+  },
+  total: {
+    type: Number,
+    required: true,
+    min: 0
+  },
+  
+  // Order status
+  status: {
+    type: String,
+    enum: ['pending', 'confirmed', 'preparing', 'ready', 'out_for_delivery', 'delivered', 'cancelled', 'refunded'],
+    default: 'pending'
+  },
+  
+  // Status history
+  statusHistory: [{
+    status: {
+      type: String,
+      required: true
+    },
+    timestamp: {
+      type: Date,
+      default: Date.now
+    },
+    note: String,
+    updatedBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'User'
+    }
+  }],
+  
+  // Delivery information
+  delivery: {
+    type: {
+      type: String,
+      enum: ['pickup', 'delivery'],
+      default: 'delivery'
+    },
+    address: {
+      fullName: String,
+      phone: String,
+      addressLine1: String,
+      addressLine2: String,
+      landmark: String,
+      city: String,
+      state: String,
+      country: String,
+      pincode: String,
+      coordinates: {
+        latitude: Number,
+        longitude: Number
+      }
+    },
+    estimatedTime: {
+      type: Number,
+      min: 0
+    },
+    actualTime: Number,
+    instructions: String,
+    partner: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'User'
+    },
+    tracking: {
+      status: String,
+      location: {
+        latitude: Number,
+        longitude: Number
+      },
+      lastUpdated: Date
+    }
+  },
+  
+  // Payment information
+  payment: {
+    method: {
+      type: String,
+      enum: ['cash', 'card', 'upi', 'wallet', 'bank_transfer'],
+      required: true
+    },
+    status: {
+      type: String,
+      enum: ['pending', 'paid', 'failed', 'refunded', 'partially_refunded'],
+      default: 'pending'
+    },
+    transactionId: String,
+    paidAt: Date,
+    refundedAt: Date,
+    refundAmount: {
+      type: Number,
+      default: 0
+    }
+  },
+  
+  // Special instructions
+  customerNotes: {
+    type: String,
+    maxlength: [500, 'Customer notes cannot exceed 500 characters']
+  },
+  shopNotes: {
+    type: String,
+    maxlength: [500, 'Shop notes cannot exceed 500 characters']
+  },
+  
+  // Timestamps for order lifecycle
+  timestamps: {
+    placedAt: {
+      type: Date,
+      default: Date.now
+    },
+    confirmedAt: Date,
+    preparingAt: Date,
+    readyAt: Date,
+    outForDeliveryAt: Date,
+    deliveredAt: Date,
+    cancelledAt: Date
+  },
+  
+  // Cancellation information
+  cancellation: {
+    reason: String,
+    cancelledBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'User'
+    },
+    refundAmount: {
+      type: Number,
+      default: 0
+    }
+  },
+  
+  // Rating and review
+  rating: {
+    overall: {
+      type: Number,
+      min: 1,
+      max: 5
+    },
+    delivery: {
+      type: Number,
+      min: 1,
+      max: 5
+    },
+    quality: {
+      type: Number,
+      min: 1,
+      max: 5
+    },
+    review: {
+      type: String,
+      maxlength: [1000, 'Review cannot exceed 1000 characters']
+    },
+    reviewDate: Date
+  },
+  
+  // Metadata
+  metadata: {
+    source: {
+      type: String,
+      enum: ['web', 'mobile', 'api'],
+      default: 'web'
+    },
+    userAgent: String,
+    ipAddress: String
+  }
+}, {
+  timestamps: true,
+  toJSON: { virtuals: true },
+  toObject: { virtuals: true }
+});
+
+// Indexes
+orderSchema.index({ orderNumber: 1 });
+orderSchema.index({ customer: 1, createdAt: -1 });
+orderSchema.index({ shop: 1, createdAt: -1 });
+orderSchema.index({ status: 1 });
+orderSchema.index({ 'payment.status': 1 });
+orderSchema.index({ createdAt: -1 });
+
+// Virtual for order age
+orderSchema.virtual('age').get(function() {
+  return Date.now() - this.createdAt;
+});
+
+// Virtual for can cancel
+orderSchema.virtual('canCancel').get(function() {
+  const cancelableStatuses = ['pending', 'confirmed', 'preparing'];
+  return cancelableStatuses.includes(this.status);
+});
+
+// Generate order number before saving
+orderSchema.pre('save', async function(next) {
+  if (this.isNew) {
+    const date = new Date();
+    const year = date.getFullYear().toString().slice(-2);
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    
+    const prefix = `KPM${year}${month}${day}`;
+    const lastOrder = await this.constructor.findOne({
+      orderNumber: new RegExp(`^${prefix}`)
+    }).sort({ orderNumber: -1 });
+    
+    let sequence = 1;
+    if (lastOrder) {
+      const lastSequence = parseInt(lastOrder.orderNumber.slice(-4));
+      sequence = lastSequence + 1;
+    }
+    
+    this.orderNumber = `${prefix}${String(sequence).padStart(4, '0')}`;
+  }
+  next();
+});
+
+// Update status history when status changes
+orderSchema.pre('save', function(next) {
+  if (this.isModified('status') && !this.isNew) {
+    this.statusHistory.push({
+      status: this.status,
+      timestamp: new Date()
+    });
+    
+    // Update timestamp based on status
+    switch (this.status) {
+      case 'confirmed':
+        this.timestamps.confirmedAt = new Date();
+        break;
+      case 'preparing':
+        this.timestamps.preparingAt = new Date();
+        break;
+      case 'ready':
+        this.timestamps.readyAt = new Date();
+        break;
+      case 'out_for_delivery':
+        this.timestamps.outForDeliveryAt = new Date();
+        break;
+      case 'delivered':
+        this.timestamps.deliveredAt = new Date();
+        this.payment.status = 'paid';
+        this.payment.paidAt = new Date();
+        break;
+      case 'cancelled':
+        this.timestamps.cancelledAt = new Date();
+        break;
+    }
+  }
+  next();
+});
+
+// Static method to get orders by status
+orderSchema.statics.getByStatus = function(status, shopId = null) {
+  const query = { status };
+  if (shopId) {
+    query.shop = shopId;
+  }
+  return this.find(query).sort({ createdAt: -1 });
+};
+
+// Static method to get revenue analytics
+orderSchema.statics.getRevenueAnalytics = async function(shopId, startDate, endDate) {
+  const pipeline = [
+    {
+      $match: {
+        shop: mongoose.Types.ObjectId(shopId),
+        status: 'delivered',
+        createdAt: {
+          $gte: startDate,
+          $lte: endDate
+        }
+      }
+    },
+    {
+      $group: {
+        _id: {
+          year: { $year: '$createdAt' },
+          month: { $month: '$createdAt' },
+          day: { $dayOfMonth: '$createdAt' }
+        },
+        totalRevenue: { $sum: '$total' },
+        orderCount: { $sum: 1 },
+        averageOrderValue: { $avg: '$total' }
+      }
+    },
+    { $sort: { '_id.year': 1, '_id.month': 1, '_id.day': 1 } }
+  ];
+  
+  return this.aggregate(pipeline);
+};
+
+// Instance method to calculate delivery time
+orderSchema.methods.getDeliveryTime = function() {
+  if (this.timestamps.deliveredAt && this.timestamps.placedAt) {
+    return Math.round((this.timestamps.deliveredAt - this.timestamps.placedAt) / (1000 * 60)); // in minutes
+  }
+  return null;
+};
+
+// Instance method to check if order can be modified
+orderSchema.methods.canModify = function() {
+  const modifiableStatuses = ['pending', 'confirmed'];
+  return modifiableStatuses.includes(this.status);
+};
+
+// Instance method to cancel order
+orderSchema.methods.cancelOrder = function(reason, cancelledBy) {
+  if (!this.canCancel) {
+    throw new Error('Order cannot be cancelled at this stage');
+  }
+  
+  this.status = 'cancelled';
+  this.cancellation = {
+    reason,
+    cancelledBy,
+    refundAmount: this.payment.status === 'paid' ? this.total : 0
+  };
+  
+  return this.save();
+};
+
+module.exports = mongoose.model('Order', orderSchema);
