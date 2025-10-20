@@ -954,6 +954,271 @@ const updateBankDetails = asyncHandler(async (req, res) => {
   });
 });
 
+// ================== DELIVERY MANAGEMENT ENDPOINTS ==================
+
+// @desc    Get shop delivery settings
+// @route   GET /api/shops/:id/delivery-settings
+// @access  Private/Shop Owner
+const getDeliverySettings = asyncHandler(async (req, res) => {
+  const shop = await Shop.findById(req.params.id);
+
+  if (!shop) {
+    return res.status(404).json({
+      status: 'error',
+      message: 'Shop not found'
+    });
+  }
+
+  // Check ownership (allow public for basic info, but detailed settings only for owner/admin)
+  const isOwner = req.user && (shop.owner.toString() === req.user.id || req.user.role === 'admin');
+
+  const deliverySettings = {
+    // Basic settings (public)
+    deliveryFee: shop.settings.deliveryFee,
+    freeDeliveryAbove: shop.settings.freeDeliveryAbove,
+    serviceRadius: shop.settings.serviceRadius,
+
+    // Delivery zones (public if active)
+    deliveryZones: shop.deliveryZones.filter(zone => zone.isActive)
+  };
+
+  // Add advanced settings only for owner/admin
+  if (isOwner) {
+    deliverySettings.usesOwnDelivery = shop.settings.usesOwnDelivery;
+    deliverySettings.usesThirdPartyDelivery = shop.settings.usesThirdPartyDelivery;
+    deliverySettings.allDeliveryZones = shop.deliveryZones; // Include inactive zones
+  }
+
+  res.status(200).json({
+    status: 'success',
+    data: {
+      deliverySettings
+    }
+  });
+});
+
+// @desc    Update shop delivery settings
+// @route   PUT /api/shops/:id/delivery-settings
+// @access  Private/Shop Owner
+const updateDeliverySettings = asyncHandler(async (req, res) => {
+  const shop = await Shop.findById(req.params.id);
+
+  if (!shop) {
+    return res.status(404).json({
+      status: 'error',
+      message: 'Shop not found'
+    });
+  }
+
+  // Check ownership
+  if (shop.owner.toString() !== req.user.id && req.user.role !== 'admin') {
+    return res.status(403).json({
+      status: 'error',
+      message: 'Not authorized to update this shop'
+    });
+  }
+
+  // Update delivery settings fields
+  const allowedFields = [
+    'deliveryFee',
+    'freeDeliveryAbove',
+    'serviceRadius',
+    'usesOwnDelivery',
+    'usesThirdPartyDelivery'
+  ];
+
+  allowedFields.forEach(field => {
+    if (req.body[field] !== undefined) {
+      shop.settings[field] = req.body[field];
+    }
+  });
+
+  await shop.save();
+
+  res.status(200).json({
+    status: 'success',
+    message: 'Delivery settings updated successfully',
+    data: {
+      deliverySettings: {
+        deliveryFee: shop.settings.deliveryFee,
+        freeDeliveryAbove: shop.settings.freeDeliveryAbove,
+        serviceRadius: shop.settings.serviceRadius,
+        usesOwnDelivery: shop.settings.usesOwnDelivery,
+        usesThirdPartyDelivery: shop.settings.usesThirdPartyDelivery
+      }
+    }
+  });
+});
+
+// @desc    Get all delivery zones for a shop
+// @route   GET /api/shops/:id/delivery-zones
+// @access  Public
+const getDeliveryZones = asyncHandler(async (req, res) => {
+  const shop = await Shop.findById(req.params.id);
+
+  if (!shop) {
+    return res.status(404).json({
+      status: 'error',
+      message: 'Shop not found'
+    });
+  }
+
+  // Show only active zones to public, all zones to owner/admin
+  const isOwner = req.user && (shop.owner.toString() === req.user.id || req.user.role === 'admin');
+  const zones = isOwner
+    ? shop.deliveryZones
+    : shop.deliveryZones.filter(zone => zone.isActive);
+
+  res.status(200).json({
+    status: 'success',
+    results: zones.length,
+    data: {
+      deliveryZones: zones
+    }
+  });
+});
+
+// @desc    Add a delivery zone
+// @route   POST /api/shops/:id/delivery-zones
+// @access  Private/Shop Owner
+const addDeliveryZone = asyncHandler(async (req, res) => {
+  const shop = await Shop.findById(req.params.id);
+
+  if (!shop) {
+    return res.status(404).json({
+      status: 'error',
+      message: 'Shop not found'
+    });
+  }
+
+  // Check ownership
+  if (shop.owner.toString() !== req.user.id && req.user.role !== 'admin') {
+    return res.status(403).json({
+      status: 'error',
+      message: 'Not authorized to update this shop'
+    });
+  }
+
+  const { name, type, value, deliveryFee, minimumOrderAmount, estimatedDeliveryTime, isActive } = req.body;
+
+  if (!name || !type || !value || deliveryFee === undefined) {
+    return res.status(400).json({
+      status: 'error',
+      message: 'Please provide name, type, value, and deliveryFee'
+    });
+  }
+
+  const newZone = {
+    name,
+    type,
+    value,
+    deliveryFee,
+    minimumOrderAmount: minimumOrderAmount || 0,
+    estimatedDeliveryTime: estimatedDeliveryTime || 30,
+    isActive: isActive !== undefined ? isActive : true
+  };
+
+  shop.deliveryZones.push(newZone);
+  await shop.save();
+
+  res.status(201).json({
+    status: 'success',
+    message: 'Delivery zone added successfully',
+    data: {
+      deliveryZone: shop.deliveryZones[shop.deliveryZones.length - 1]
+    }
+  });
+});
+
+// @desc    Update a delivery zone
+// @route   PUT /api/shops/:id/delivery-zones/:zoneId
+// @access  Private/Shop Owner
+const updateDeliveryZone = asyncHandler(async (req, res) => {
+  const shop = await Shop.findById(req.params.id);
+
+  if (!shop) {
+    return res.status(404).json({
+      status: 'error',
+      message: 'Shop not found'
+    });
+  }
+
+  // Check ownership
+  if (shop.owner.toString() !== req.user.id && req.user.role !== 'admin') {
+    return res.status(403).json({
+      status: 'error',
+      message: 'Not authorized to update this shop'
+    });
+  }
+
+  const zone = shop.deliveryZones.id(req.params.zoneId);
+
+  if (!zone) {
+    return res.status(404).json({
+      status: 'error',
+      message: 'Delivery zone not found'
+    });
+  }
+
+  // Update zone fields
+  const allowedFields = ['name', 'type', 'value', 'deliveryFee', 'minimumOrderAmount', 'estimatedDeliveryTime', 'isActive'];
+  allowedFields.forEach(field => {
+    if (req.body[field] !== undefined) {
+      zone[field] = req.body[field];
+    }
+  });
+
+  await shop.save();
+
+  res.status(200).json({
+    status: 'success',
+    message: 'Delivery zone updated successfully',
+    data: {
+      deliveryZone: zone
+    }
+  });
+});
+
+// @desc    Delete a delivery zone
+// @route   DELETE /api/shops/:id/delivery-zones/:zoneId
+// @access  Private/Shop Owner
+const deleteDeliveryZone = asyncHandler(async (req, res) => {
+  const shop = await Shop.findById(req.params.id);
+
+  if (!shop) {
+    return res.status(404).json({
+      status: 'error',
+      message: 'Shop not found'
+    });
+  }
+
+  // Check ownership
+  if (shop.owner.toString() !== req.user.id && req.user.role !== 'admin') {
+    return res.status(403).json({
+      status: 'error',
+      message: 'Not authorized to update this shop'
+    });
+  }
+
+  const zone = shop.deliveryZones.id(req.params.zoneId);
+
+  if (!zone) {
+    return res.status(404).json({
+      status: 'error',
+      message: 'Delivery zone not found'
+    });
+  }
+
+  zone.deleteOne();
+  await shop.save();
+
+  res.status(200).json({
+    status: 'success',
+    message: 'Delivery zone deleted successfully',
+    data: null
+  });
+});
+
 module.exports = {
   getShops,
   getShop,
@@ -971,5 +1236,11 @@ module.exports = {
   updateAddress,
   updateBusinessHours,
   updateSettings,
-  updateBankDetails
+  updateBankDetails,
+  getDeliverySettings,
+  updateDeliverySettings,
+  getDeliveryZones,
+  addDeliveryZone,
+  updateDeliveryZone,
+  deleteDeliveryZone
 };

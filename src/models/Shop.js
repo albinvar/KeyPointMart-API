@@ -20,6 +20,42 @@ const businessHoursSchema = new mongoose.Schema({
   }
 });
 
+const deliveryZoneSchema = new mongoose.Schema({
+  name: {
+    type: String,
+    required: true,
+    trim: true
+  },
+  type: {
+    type: String,
+    enum: ['pincode', 'area', 'radius'],
+    default: 'area'
+  },
+  value: {
+    type: String,
+    required: true
+  },
+  deliveryFee: {
+    type: Number,
+    required: true,
+    min: 0
+  },
+  minimumOrderAmount: {
+    type: Number,
+    default: 0,
+    min: 0
+  },
+  estimatedDeliveryTime: {
+    type: Number, // in minutes
+    default: 30,
+    min: 5
+  },
+  isActive: {
+    type: Boolean,
+    default: true
+  }
+});
+
 const shopSchema = new mongoose.Schema({
   owner: {
     type: mongoose.Schema.Types.ObjectId,
@@ -137,9 +173,13 @@ const shopSchema = new mongoose.Schema({
   
   // Business Hours
   businessHours: [businessHoursSchema],
-  
+
+  // Delivery Zones
+  deliveryZones: [deliveryZoneSchema],
+
   // Operational Settings
   settings: {
+    // General Settings
     isOpen: {
       type: Boolean,
       default: true
@@ -153,6 +193,19 @@ const shopSchema = new mongoose.Schema({
       default: 0,
       min: 0
     },
+
+    // Order Management
+    autoAcceptOrders: {
+      type: Boolean,
+      default: false
+    },
+    preparationTime: {
+      type: Number,
+      default: 30,
+      min: 5
+    },
+
+    // Delivery Settings
     deliveryFee: {
       type: Number,
       default: 0,
@@ -168,11 +221,16 @@ const shopSchema = new mongoose.Schema({
       min: 1,
       max: 50
     },
-    preparationTime: {
-      type: Number,
-      default: 30,
-      min: 5
+    usesOwnDelivery: {
+      type: Boolean,
+      default: true
     },
+    usesThirdPartyDelivery: {
+      type: Boolean,
+      default: false
+    },
+
+    // Payment Settings
     paymentMethods: [{
       type: String,
       enum: ['cash', 'card', 'upi', 'wallet', 'bank_transfer']

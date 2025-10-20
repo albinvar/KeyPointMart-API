@@ -16,7 +16,13 @@ const {
   updateAddress,
   updateBusinessHours,
   updateSettings,
-  updateBankDetails
+  updateBankDetails,
+  getDeliverySettings,
+  updateDeliverySettings,
+  getDeliveryZones,
+  addDeliveryZone,
+  updateDeliveryZone,
+  deleteDeliveryZone
 } = require('../controllers/shopController');
 const { protect, authorize, checkShopOwnership } = require('../middleware/auth');
 const { validate, schemas } = require('../utils/validation');
@@ -908,5 +914,232 @@ router.put('/:id/settings', protect, updateSettings);
  *         description: Shop not found
  */
 router.put('/:id/bank-details', protect, updateBankDetails);
+
+/**
+ * @swagger
+ * /api/shops/{id}/delivery-settings:
+ *   get:
+ *     summary: Get shop delivery settings
+ *     tags: [Shops]
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Shop ID
+ *     responses:
+ *       200:
+ *         description: Delivery settings retrieved successfully
+ *       404:
+ *         description: Shop not found
+ *   put:
+ *     summary: Update shop delivery settings (Shop owner only)
+ *     tags: [Shops]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Shop ID
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               deliveryFee:
+ *                 type: number
+ *                 minimum: 0
+ *               freeDeliveryAbove:
+ *                 type: number
+ *                 minimum: 0
+ *               serviceRadius:
+ *                 type: number
+ *                 minimum: 1
+ *                 maximum: 50
+ *               usesOwnDelivery:
+ *                 type: boolean
+ *               usesThirdPartyDelivery:
+ *                 type: boolean
+ *     responses:
+ *       200:
+ *         description: Delivery settings updated successfully
+ *       403:
+ *         description: Not authorized to update this shop
+ *       404:
+ *         description: Shop not found
+ */
+router.route('/:id/delivery-settings')
+  .get(getDeliverySettings)
+  .put(protect, updateDeliverySettings);
+
+/**
+ * @swagger
+ * /api/shops/{id}/delivery-zones:
+ *   get:
+ *     summary: Get all delivery zones for a shop
+ *     tags: [Shops]
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Shop ID
+ *     responses:
+ *       200:
+ *         description: Delivery zones retrieved successfully
+ *       404:
+ *         description: Shop not found
+ *   post:
+ *     summary: Add a delivery zone (Shop owner only)
+ *     tags: [Shops]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Shop ID
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - name
+ *               - type
+ *               - value
+ *               - deliveryFee
+ *             properties:
+ *               name:
+ *                 type: string
+ *                 description: Zone name (e.g., "Andheri West", "400053")
+ *               type:
+ *                 type: string
+ *                 enum: [pincode, area, radius]
+ *                 description: Zone type
+ *               value:
+ *                 type: string
+ *                 description: Zone value (pincode, area name, or radius in km)
+ *               deliveryFee:
+ *                 type: number
+ *                 minimum: 0
+ *                 description: Delivery fee for this zone
+ *               minimumOrderAmount:
+ *                 type: number
+ *                 minimum: 0
+ *                 description: Minimum order amount for this zone
+ *               estimatedDeliveryTime:
+ *                 type: number
+ *                 minimum: 5
+ *                 description: Estimated delivery time in minutes
+ *               isActive:
+ *                 type: boolean
+ *                 description: Whether this zone is active
+ *     responses:
+ *       201:
+ *         description: Delivery zone added successfully
+ *       400:
+ *         description: Missing required fields
+ *       403:
+ *         description: Not authorized to update this shop
+ *       404:
+ *         description: Shop not found
+ */
+router.route('/:id/delivery-zones')
+  .get(getDeliveryZones)
+  .post(protect, addDeliveryZone);
+
+/**
+ * @swagger
+ * /api/shops/{id}/delivery-zones/{zoneId}:
+ *   put:
+ *     summary: Update a delivery zone (Shop owner only)
+ *     tags: [Shops]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Shop ID
+ *       - in: path
+ *         name: zoneId
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Delivery zone ID
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               name:
+ *                 type: string
+ *               type:
+ *                 type: string
+ *                 enum: [pincode, area, radius]
+ *               value:
+ *                 type: string
+ *               deliveryFee:
+ *                 type: number
+ *                 minimum: 0
+ *               minimumOrderAmount:
+ *                 type: number
+ *                 minimum: 0
+ *               estimatedDeliveryTime:
+ *                 type: number
+ *                 minimum: 5
+ *               isActive:
+ *                 type: boolean
+ *     responses:
+ *       200:
+ *         description: Delivery zone updated successfully
+ *       403:
+ *         description: Not authorized to update this shop
+ *       404:
+ *         description: Shop or zone not found
+ *   delete:
+ *     summary: Delete a delivery zone (Shop owner only)
+ *     tags: [Shops]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Shop ID
+ *       - in: path
+ *         name: zoneId
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Delivery zone ID
+ *     responses:
+ *       200:
+ *         description: Delivery zone deleted successfully
+ *       403:
+ *         description: Not authorized to update this shop
+ *       404:
+ *         description: Shop or zone not found
+ */
+router.route('/:id/delivery-zones/:zoneId')
+  .put(protect, updateDeliveryZone)
+  .delete(protect, deleteDeliveryZone);
 
 module.exports = router;
