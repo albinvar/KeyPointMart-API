@@ -22,7 +22,10 @@ const {
   getDeliveryZones,
   addDeliveryZone,
   updateDeliveryZone,
-  deleteDeliveryZone
+  deleteDeliveryZone,
+  getOrderSettings,
+  updateOrderSettings,
+  getOrderCapacity
 } = require('../controllers/shopController');
 const { protect, authorize, checkShopOwnership } = require('../middleware/auth');
 const { validate, schemas } = require('../utils/validation');
@@ -304,6 +307,95 @@ router.route('/')
  *         description: Latitude and longitude are required
  */
 router.get('/nearby', getNearbyShops);
+
+/**
+ * @swagger
+ * /api/shops/{id}/order-settings:
+ *   get:
+ *     summary: Get shop order management settings
+ *     tags: [Shops]
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Shop ID
+ *     responses:
+ *       200:
+ *         description: Order settings retrieved successfully
+ *       404:
+ *         description: Shop not found
+ *   put:
+ *     summary: Update shop order management settings (Shop owner only)
+ *     tags: [Shops]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Shop ID
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               autoAcceptOrders:
+ *                 type: boolean
+ *               preparationTime:
+ *                 type: number
+ *                 minimum: 5
+ *               maxOrdersPerHour:
+ *                 type: number
+ *                 minimum: 1
+ *               maxActiveOrders:
+ *                 type: number
+ *                 minimum: 1
+ *               pauseOrdersUntil:
+ *                 type: string
+ *                 format: date-time
+ *               minimumOrderAmount:
+ *                 type: number
+ *                 minimum: 0
+ *               acceptsOrders:
+ *                 type: boolean
+ *     responses:
+ *       200:
+ *         description: Order settings updated successfully
+ *       403:
+ *         description: Not authorized
+ *       404:
+ *         description: Shop not found
+ */
+router.route('/:id/order-settings')
+  .get(getOrderSettings)
+  .put(protect, updateOrderSettings);
+
+/**
+ * @swagger
+ * /api/shops/{id}/order-capacity:
+ *   get:
+ *     summary: Get shop order capacity status (real-time)
+ *     tags: [Shops]
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Shop ID
+ *     responses:
+ *       200:
+ *         description: Order capacity status retrieved successfully
+ *       404:
+ *         description: Shop not found
+ */
+router.get('/:id/order-capacity', getOrderCapacity);
 
 /**
  * @swagger

@@ -1219,6 +1219,170 @@ const deleteDeliveryZone = asyncHandler(async (req, res) => {
   });
 });
 
+// ================== ORDER MANAGEMENT ENDPOINTS ==================
+
+// @desc    Get shop order management settings
+// @route   GET /api/shops/:id/order-settings
+// @access  Public (basic) / Private/Shop Owner (detailed)
+const getOrderSettings = asyncHandler(async (req, res) => {
+  const shop = await Shop.findById(req.params.id);
+
+  if (!shop) {
+    return res.status(404).json({
+      status: 'error',
+      message: 'Shop not found'
+    });
+  }
+
+  // Check ownership (allow public for basic info, but detailed settings only for owner/admin)
+  const isOwner = req.user && (shop.owner.toString() === req.user.id || req.user.role === 'admin');
+
+  const orderSettings = {
+    // Public settings
+    preparationTime: shop.settings.preparationTime,
+    minimumOrderAmount: shop.settings.minimumOrderAmount,
+    acceptsOrders: shop.settings.acceptsOrders
+  };
+
+  // Add detailed settings only for owner/admin
+  if (isOwner) {
+    orderSettings.autoAcceptOrders = shop.settings.autoAcceptOrders;
+    orderSettings.maxOrdersPerHour = shop.settings.maxOrdersPerHour;
+    orderSettings.maxActiveOrders = shop.settings.maxActiveOrders;
+    orderSettings.pauseOrdersUntil = shop.settings.pauseOrdersUntil;
+  }
+
+  res.status(200).json({
+    status: 'success',
+    data: {
+      orderSettings
+    }
+  });
+});
+
+// @desc    Update shop order management settings
+// @route   PUT /api/shops/:id/order-settings
+// @access  Private/Shop Owner
+const updateOrderSettings = asyncHandler(async (req, res) => {
+  const shop = await Shop.findById(req.params.id);
+
+  if (!shop) {
+    return res.status(404).json({
+      status: 'error',
+      message: 'Shop not found'
+    });
+  }
+
+  // Check ownership
+  if (shop.owner.toString() !== req.user.id && req.user.role !== 'admin') {
+    return res.status(403).json({
+      status: 'error',
+      message: 'Not authorized to update this shop'
+    });
+  }
+
+  // Update order management settings
+  const allowedFields = [
+    'autoAcceptOrders',
+    'preparationTime',
+    'maxOrdersPerHour',
+    'maxActiveOrders',
+    'pauseOrdersUntil',
+    'minimumOrderAmount',
+    'acceptsOrders'
+  ];
+
+  allowedFields.forEach(field => {
+    if (req.body[field] !== undefined) {
+      shop.settings[field] = req.body[field];
+    }
+  });
+
+  await shop.save();
+
+  res.status(200).json({
+    status: 'success',
+    message: 'Order management settings updated successfully',
+    data: {
+      orderSettings: {
+        autoAcceptOrders: shop.settings.autoAcceptOrders,
+        preparationTime: shop.settings.preparationTime,
+        maxOrdersPerHour: shop.settings.maxOrdersPerHour,
+        maxActiveOrders: shop.settings.maxActiveOrders,
+        pauseOrdersUntil: shop.settings.pauseOrdersUntil,
+        minimumOrderAmount: shop.settings.minimumOrderAmount,
+        acceptsOrders: shop.settings.acceptsOrders
+      }
+    }
+  });
+});
+
+// @desc    Get shop order capacity status
+// @route   GET /api/shops/:id/order-capacity
+// @access  Public
+const getOrderCapacity = asyncHandler(async (req, res) => {
+  const shop = await Shop.findById(req.params.id);
+
+  if (!shop) {
+    return res.status(404).json({
+      status: 'error',
+      message: 'Shop not found'
+    });
+  }
+
+  const Order = require('../models/Order');
+
+  const capacityStatus = {
+    acceptingOrders: shop.settings.acceptsOrders && shop.isActive,
+    preparationTime: shop.settings.preparationTime
+  };
+
+  // Check if orders are paused
+  if (shop.settings.pauseOrdersUntil && new Date(shop.settings.pauseOrdersUntil) > new Date()) {
+    capacityStatus.acceptingOrders = false;
+    capacityStatus.reason = 'temporarily_paused';
+    capacityStatus.pausedUntil = shop.settings.pauseOrdersUntil;
+  }
+
+  // Check max active orders
+  if (shop.settings.maxActiveOrders && capacityStatus.acceptingOrders) {
+    const activeOrdersCount = await Order.countDocuments({
+      shop: shop._id,
+      status: { $in: ['pending', 'confirmed', 'preparing', 'ready', 'out_for_delivery'] }
+    });
+
+    capacityStatus.activeOrders = activeOrdersCount;
+    capacityStatus.maxActiveOrders = shop.settings.maxActiveOrders;
+
+    if (activeOrdersCount >= shop.settings.maxActiveOrders) {
+      capacityStatus.acceptingOrders = false;
+      capacityStatus.reason = 'at_capacity';
+    }
+  }
+
+  // Check max orders per hour
+  if (shop.settings.maxOrdersPerHour && capacityStatus.acceptingOrders) {
+    const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000);
+    const recentOrdersCount = await Order.countDocuments({
+      shop: shop._id,
+      createdAt: { $gte: oneHourAgo }
+    });
+
+    capacityStatus.ordersThisHour = recentOrdersCount;
+    capacityStatus.maxOrdersPerHour = shop.settings.maxOrdersPerHour;
+
+    if (recentOrdersCount >= shop.settings.maxOrdersPerHour) {
+      capacityStatus.acceptingOrders = false;
+      capacityStatus.reason = 'hourly_limit_reached';
+    }
+  }
+
+  res.status(200).json({
+    status: 'success',
+    data: { capacityStatus }
+  });
+});
+
 module.exports = {
   getShops,
   getShop,
@@ -1242,5 +1406,8 @@ module.exports = {
   getDeliveryZones,
   addDeliveryZone,
   updateDeliveryZone,
-  deleteDeliveryZone
+  deleteDeliveryZone,
+  getOrderSettings,
+  updateOrderSettings,
+  getOrderCapacity
 };
