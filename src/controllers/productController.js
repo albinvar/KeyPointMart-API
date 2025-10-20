@@ -6,6 +6,19 @@ const multer = require('multer');
 const path = require('path');
 const { v4: uuidv4 } = require('uuid');
 
+// Helper function: Calculate distance between two coordinates using Haversine formula
+const calculateDistance = (lat1, lon1, lat2, lon2) => {
+  const R = 6371; // Earth's radius in km
+  const dLat = (lat2 - lat1) * Math.PI / 180;
+  const dLon = (lon2 - lon1) * Math.PI / 180;
+  const a =
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+    Math.sin(dLon / 2) * Math.sin(dLon / 2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  return R * c; // Distance in km
+};
+
 // Configure multer for product image upload
 const storage = multer.diskStorage({
   destination: (req, file, cb) => {
@@ -104,27 +117,74 @@ const getProducts = asyncHandler(async (req, res) => {
     query.isFeatured = true;
   }
 
-  // Location-based filtering
+  // Location-based filtering with delivery zones support
   let locationFilter = {};
   if (latitude && longitude) {
-    const shops = await Shop.find({
-      'address.coordinates': {
-        $near: {
-          $geometry: {
-            type: 'Point',
-            coordinates: [parseFloat(longitude), parseFloat(latitude)]
-          },
-          $maxDistance: parseFloat(radius) * 1000 // Convert km to meters
-        }
-      },
+    const lat = parseFloat(latitude);
+    const lon = parseFloat(longitude);
+    const userPincode = req.query.pincode; // Optional pincode for zone matching
+    const userArea = req.query.area; // Optional area for zone matching
+
+    // Get all active and verified shops
+    const allShops = await Shop.find({
       isActive: true,
-      'verification.status': 'verified'
-    }).select('_id');
-    
-    if (shops.length > 0) {
-      query.shop = { $in: shops.map(shop => shop._id) };
+      'verification.status': 'verified',
+      'settings.acceptsOrders': true,
+      'settings.isOpen': true
+    });
+
+    const availableShops = [];
+
+    for (const shop of allShops) {
+      let canDeliver = false;
+
+      // Check delivery zones first (more specific)
+      if (shop.deliveryZones && shop.deliveryZones.length > 0) {
+        for (const zone of shop.deliveryZones) {
+          if (!zone.isActive) continue;
+
+          if (zone.type === 'pincode' && userPincode && zone.value === userPincode) {
+            canDeliver = true;
+            break;
+          } else if (zone.type === 'area' && userArea && zone.value.toLowerCase().includes(userArea.toLowerCase())) {
+            canDeliver = true;
+            break;
+          } else if (zone.type === 'radius' && shop.address?.coordinates?.latitude && shop.address?.coordinates?.longitude) {
+            const distance = calculateDistance(
+              lat, lon,
+              shop.address.coordinates.latitude,
+              shop.address.coordinates.longitude
+            );
+            if (distance <= parseFloat(zone.value)) {
+              canDeliver = true;
+              break;
+            }
+          }
+        }
+      }
+
+      // Fallback to global service radius if no zones or no zone match
+      if (!canDeliver && shop.address?.coordinates?.latitude && shop.address?.coordinates?.longitude) {
+        const distance = calculateDistance(
+          lat, lon,
+          shop.address.coordinates.latitude,
+          shop.address.coordinates.longitude
+        );
+        const serviceRadius = shop.settings?.serviceRadius || 5;
+        if (distance <= serviceRadius) {
+          canDeliver = true;
+        }
+      }
+
+      if (canDeliver) {
+        availableShops.push(shop._id);
+      }
+    }
+
+    if (availableShops.length > 0) {
+      query.shop = { $in: availableShops };
     } else {
-      query.shop = { $in: [] }; // No shops in range
+      query.shop = { $in: [] }; // No shops can deliver to this location
     }
   }
 
