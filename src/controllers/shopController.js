@@ -694,6 +694,266 @@ const getNearbyShops = asyncHandler(async (req, res) => {
   });
 });
 
+// @desc    Update shop basic information
+// @route   PUT /api/shops/:id/basic-info
+// @access  Private/Shop Owner
+const updateBasicInfo = asyncHandler(async (req, res) => {
+  const shop = await Shop.findById(req.params.id);
+
+  if (!shop) {
+    return res.status(404).json({
+      status: 'error',
+      message: 'Shop not found'
+    });
+  }
+
+  // Check ownership
+  if (shop.owner.toString() !== req.user.id && req.user.role !== 'admin') {
+    return res.status(403).json({
+      status: 'error',
+      message: 'Not authorized to update this shop'
+    });
+  }
+
+  // Update only allowed fields
+  const allowedFields = ['businessName', 'description', 'businessType', 'categories'];
+  const updates = {};
+
+  allowedFields.forEach(field => {
+    if (req.body[field] !== undefined) {
+      updates[field] = req.body[field];
+    }
+  });
+
+  const updatedShop = await Shop.findByIdAndUpdate(
+    req.params.id,
+    updates,
+    { new: true, runValidators: true }
+  ).populate('owner', 'name email phone')
+   .populate('categories', 'name slug');
+
+  res.status(200).json({
+    status: 'success',
+    message: 'Basic information updated successfully',
+    data: { shop: updatedShop }
+  });
+});
+
+// @desc    Update shop contact information
+// @route   PUT /api/shops/:id/contact
+// @access  Private/Shop Owner
+const updateContactInfo = asyncHandler(async (req, res) => {
+  const shop = await Shop.findById(req.params.id);
+
+  if (!shop) {
+    return res.status(404).json({
+      status: 'error',
+      message: 'Shop not found'
+    });
+  }
+
+  // Check ownership
+  if (shop.owner.toString() !== req.user.id && req.user.role !== 'admin') {
+    return res.status(403).json({
+      status: 'error',
+      message: 'Not authorized to update this shop'
+    });
+  }
+
+  // Update contact info
+  if (req.body.phone) shop.contactInfo.phone = req.body.phone;
+  if (req.body.email) shop.contactInfo.email = req.body.email;
+  if (req.body.website) shop.contactInfo.website = req.body.website;
+  if (req.body.whatsapp) shop.contactInfo.whatsapp = req.body.whatsapp;
+
+  await shop.save();
+
+  res.status(200).json({
+    status: 'success',
+    message: 'Contact information updated successfully',
+    data: { shop }
+  });
+});
+
+// @desc    Update shop address and location
+// @route   PUT /api/shops/:id/address
+// @access  Private/Shop Owner
+const updateAddress = asyncHandler(async (req, res) => {
+  const shop = await Shop.findById(req.params.id);
+
+  if (!shop) {
+    return res.status(404).json({
+      status: 'error',
+      message: 'Shop not found'
+    });
+  }
+
+  // Check ownership
+  if (shop.owner.toString() !== req.user.id && req.user.role !== 'admin') {
+    return res.status(403).json({
+      status: 'error',
+      message: 'Not authorized to update this shop'
+    });
+  }
+
+  // Update address fields
+  if (req.body.addressLine1) shop.address.addressLine1 = req.body.addressLine1;
+  if (req.body.addressLine2 !== undefined) shop.address.addressLine2 = req.body.addressLine2;
+  if (req.body.landmark !== undefined) shop.address.landmark = req.body.landmark;
+  if (req.body.city) shop.address.city = req.body.city;
+  if (req.body.state) shop.address.state = req.body.state;
+  if (req.body.country) shop.address.country = req.body.country;
+  if (req.body.pincode) shop.address.pincode = req.body.pincode;
+
+  // Update coordinates
+  if (req.body.latitude !== undefined && req.body.longitude !== undefined) {
+    shop.address.coordinates = {
+      latitude: req.body.latitude,
+      longitude: req.body.longitude
+    };
+  }
+
+  await shop.save();
+
+  res.status(200).json({
+    status: 'success',
+    message: 'Address updated successfully',
+    data: { shop }
+  });
+});
+
+// @desc    Update shop business hours
+// @route   PUT /api/shops/:id/business-hours
+// @access  Private/Shop Owner
+const updateBusinessHours = asyncHandler(async (req, res) => {
+  const shop = await Shop.findById(req.params.id);
+
+  if (!shop) {
+    return res.status(404).json({
+      status: 'error',
+      message: 'Shop not found'
+    });
+  }
+
+  // Check ownership
+  if (shop.owner.toString() !== req.user.id && req.user.role !== 'admin') {
+    return res.status(403).json({
+      status: 'error',
+      message: 'Not authorized to update this shop'
+    });
+  }
+
+  // Validate and update business hours
+  if (!Array.isArray(req.body.businessHours)) {
+    return res.status(400).json({
+      status: 'error',
+      message: 'Business hours must be an array'
+    });
+  }
+
+  shop.businessHours = req.body.businessHours;
+  await shop.save();
+
+  res.status(200).json({
+    status: 'success',
+    message: 'Business hours updated successfully',
+    data: { shop }
+  });
+});
+
+// @desc    Update shop settings (delivery, payments, etc.)
+// @route   PUT /api/shops/:id/settings
+// @access  Private/Shop Owner
+const updateSettings = asyncHandler(async (req, res) => {
+  const shop = await Shop.findById(req.params.id);
+
+  if (!shop) {
+    return res.status(404).json({
+      status: 'error',
+      message: 'Shop not found'
+    });
+  }
+
+  // Check ownership
+  if (shop.owner.toString() !== req.user.id && req.user.role !== 'admin') {
+    return res.status(403).json({
+      status: 'error',
+      message: 'Not authorized to update this shop'
+    });
+  }
+
+  // Update settings fields
+  const allowedSettings = [
+    'isOpen',
+    'acceptsOrders',
+    'minimumOrderAmount',
+    'deliveryFee',
+    'freeDeliveryAbove',
+    'serviceRadius',
+    'preparationTime',
+    'paymentMethods'
+  ];
+
+  allowedSettings.forEach(field => {
+    if (req.body[field] !== undefined) {
+      shop.settings[field] = req.body[field];
+    }
+  });
+
+  await shop.save();
+
+  res.status(200).json({
+    status: 'success',
+    message: 'Settings updated successfully',
+    data: { shop }
+  });
+});
+
+// @desc    Update shop bank details
+// @route   PUT /api/shops/:id/bank-details
+// @access  Private/Shop Owner
+const updateBankDetails = asyncHandler(async (req, res) => {
+  const shop = await Shop.findById(req.params.id);
+
+  if (!shop) {
+    return res.status(404).json({
+      status: 'error',
+      message: 'Shop not found'
+    });
+  }
+
+  // Check ownership
+  if (shop.owner.toString() !== req.user.id && req.user.role !== 'admin') {
+    return res.status(403).json({
+      status: 'error',
+      message: 'Not authorized to update this shop'
+    });
+  }
+
+  // Update bank details
+  if (!shop.documents) {
+    shop.documents = {};
+  }
+  if (!shop.documents.bankDetails) {
+    shop.documents.bankDetails = {};
+  }
+
+  if (req.body.accountNumber) shop.documents.bankDetails.accountNumber = req.body.accountNumber;
+  if (req.body.ifscCode) shop.documents.bankDetails.ifscCode = req.body.ifscCode;
+  if (req.body.bankName) shop.documents.bankDetails.bankName = req.body.bankName;
+  if (req.body.accountHolderName) shop.documents.bankDetails.accountHolderName = req.body.accountHolderName;
+
+  await shop.save();
+
+  res.status(200).json({
+    status: 'success',
+    message: 'Bank details updated successfully',
+    data: {
+      bankDetails: shop.documents.bankDetails
+    }
+  });
+});
+
 module.exports = {
   getShops,
   getShop,
@@ -705,5 +965,11 @@ module.exports = {
   getShopProducts,
   uploadShopImages,
   verifyShop,
-  getNearbyShops
+  getNearbyShops,
+  updateBasicInfo,
+  updateContactInfo,
+  updateAddress,
+  updateBusinessHours,
+  updateSettings,
+  updateBankDetails
 };

@@ -10,7 +10,13 @@ const {
   getShopProducts,
   uploadShopImages,
   verifyShop,
-  getNearbyShops
+  getNearbyShops,
+  updateBasicInfo,
+  updateContactInfo,
+  updateAddress,
+  updateBusinessHours,
+  updateSettings,
+  updateBankDetails
 } = require('../controllers/shopController');
 const { protect, authorize, checkShopOwnership } = require('../middleware/auth');
 const { validate, schemas } = require('../utils/validation');
@@ -611,5 +617,296 @@ router.post('/:id/upload', protect, uploadShopImages);
  *         description: Access forbidden
  */
 router.put('/:id/verify', protect, authorize('admin'), verifyShop);
+
+/**
+ * @swagger
+ * /api/shops/{id}/basic-info:
+ *   put:
+ *     summary: Update shop basic information (Shop owner only)
+ *     tags: [Shops]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Shop ID
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               businessName:
+ *                 type: string
+ *                 maxLength: 200
+ *               description:
+ *                 type: string
+ *                 maxLength: 1000
+ *               businessType:
+ *                 type: string
+ *                 enum: [restaurant, shop, firm, grocery, pharmacy, electronics, clothing, other]
+ *               categories:
+ *                 type: array
+ *                 items:
+ *                   type: string
+ *     responses:
+ *       200:
+ *         description: Basic information updated successfully
+ *       403:
+ *         description: Not authorized to update this shop
+ *       404:
+ *         description: Shop not found
+ */
+router.put('/:id/basic-info', protect, updateBasicInfo);
+
+/**
+ * @swagger
+ * /api/shops/{id}/contact:
+ *   put:
+ *     summary: Update shop contact information (Shop owner only)
+ *     tags: [Shops]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Shop ID
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               phone:
+ *                 type: string
+ *               email:
+ *                 type: string
+ *                 format: email
+ *               website:
+ *                 type: string
+ *                 format: uri
+ *               whatsapp:
+ *                 type: string
+ *     responses:
+ *       200:
+ *         description: Contact information updated successfully
+ *       403:
+ *         description: Not authorized to update this shop
+ *       404:
+ *         description: Shop not found
+ */
+router.put('/:id/contact', protect, updateContactInfo);
+
+/**
+ * @swagger
+ * /api/shops/{id}/address:
+ *   put:
+ *     summary: Update shop address (Shop owner only)
+ *     tags: [Shops]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Shop ID
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               addressLine1:
+ *                 type: string
+ *               addressLine2:
+ *                 type: string
+ *               landmark:
+ *                 type: string
+ *               city:
+ *                 type: string
+ *               state:
+ *                 type: string
+ *               country:
+ *                 type: string
+ *               pincode:
+ *                 type: string
+ *                 pattern: '^\\d{6}$'
+ *               coordinates:
+ *                 type: object
+ *                 properties:
+ *                   latitude:
+ *                     type: number
+ *                     minimum: -90
+ *                     maximum: 90
+ *                   longitude:
+ *                     type: number
+ *                     minimum: -180
+ *                     maximum: 180
+ *     responses:
+ *       200:
+ *         description: Address updated successfully
+ *       403:
+ *         description: Not authorized to update this shop
+ *       404:
+ *         description: Shop not found
+ */
+router.put('/:id/address', protect, updateAddress);
+
+/**
+ * @swagger
+ * /api/shops/{id}/business-hours:
+ *   put:
+ *     summary: Update shop business hours (Shop owner only)
+ *     tags: [Shops]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Shop ID
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               businessHours:
+ *                 type: array
+ *                 items:
+ *                   type: object
+ *                   properties:
+ *                     day:
+ *                       type: string
+ *                       enum: [monday, tuesday, wednesday, thursday, friday, saturday, sunday]
+ *                     isOpen:
+ *                       type: boolean
+ *                     openTime:
+ *                       type: string
+ *                       pattern: '^([01]?[0-9]|2[0-3]):[0-5][0-9]$'
+ *                     closeTime:
+ *                       type: string
+ *                       pattern: '^([01]?[0-9]|2[0-3]):[0-5][0-9]$'
+ *     responses:
+ *       200:
+ *         description: Business hours updated successfully
+ *       403:
+ *         description: Not authorized to update this shop
+ *       404:
+ *         description: Shop not found
+ */
+router.put('/:id/business-hours', protect, updateBusinessHours);
+
+/**
+ * @swagger
+ * /api/shops/{id}/settings:
+ *   put:
+ *     summary: Update shop settings (Shop owner only)
+ *     tags: [Shops]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Shop ID
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               deliveryFee:
+ *                 type: number
+ *                 minimum: 0
+ *               freeDeliveryAbove:
+ *                 type: number
+ *                 minimum: 0
+ *               isOpen:
+ *                 type: boolean
+ *               acceptsOrders:
+ *                 type: boolean
+ *               minimumOrderAmount:
+ *                 type: number
+ *                 minimum: 0
+ *               paymentMethods:
+ *                 type: array
+ *                 items:
+ *                   type: string
+ *                   enum: [cash, card, upi, wallet, bank_transfer]
+ *               serviceRadius:
+ *                 type: number
+ *                 minimum: 0
+ *               preparationTime:
+ *                 type: number
+ *                 minimum: 0
+ *               requiresApproval:
+ *                 type: boolean
+ *     responses:
+ *       200:
+ *         description: Settings updated successfully
+ *       403:
+ *         description: Not authorized to update this shop
+ *       404:
+ *         description: Shop not found
+ */
+router.put('/:id/settings', protect, updateSettings);
+
+/**
+ * @swagger
+ * /api/shops/{id}/bank-details:
+ *   put:
+ *     summary: Update shop bank details (Shop owner only)
+ *     tags: [Shops]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Shop ID
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               accountHolderName:
+ *                 type: string
+ *               accountNumber:
+ *                 type: string
+ *               ifscCode:
+ *                 type: string
+ *               bankName:
+ *                 type: string
+ *     responses:
+ *       200:
+ *         description: Bank details updated successfully
+ *       403:
+ *         description: Not authorized to update this shop
+ *       404:
+ *         description: Shop not found
+ */
+router.put('/:id/bank-details', protect, updateBankDetails);
 
 module.exports = router;
