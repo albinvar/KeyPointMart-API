@@ -144,14 +144,14 @@ const getShops = asyncHandler(async (req, res) => {
 // @route   GET /api/shops/:identifier
 // @access  Public
 const getShop = asyncHandler(async (req, res) => {
-  const { identifier } = req.params;
-  
-  let shop = await Shop.findById(identifier)
+  const { id } = req.params;
+
+  let shop = await Shop.findById(id)
     .populate('owner', 'name email phone createdAt')
     .populate('categories', 'name slug');
-  
+
   if (!shop) {
-    shop = await Shop.findOne({ slug: identifier })
+    shop = await Shop.findOne({ slug: id })
       .populate('owner', 'name email phone createdAt')
       .populate('categories', 'name slug');
   }

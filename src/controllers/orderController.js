@@ -5,6 +5,7 @@ const User = require('../models/User');
 const Address = require('../models/Address');
 const { asyncHandler } = require('../middleware/errorHandler');
 const { sendNotification } = require('../utils/notifications');
+const { emitToUser, emitToOrder, emitToShop } = require('../config/socket');
 
 // @desc    Create new order
 // @route   POST /api/orders
@@ -204,6 +205,45 @@ const createOrder = asyncHandler(async (req, res) => {
     console.error('Notification sending failed:', error);
   }
 
+  // Emit real-time events
+  try {
+    // Emit to customer
+    emitToUser(req.user.id, 'order:created', {
+      orderId: order._id,
+      orderNumber: order.orderNumber,
+      status: order.status,
+      total: order.total,
+      shop: {
+        _id: shopDoc._id,
+        businessName: shopDoc.businessName
+      },
+      timestamp: new Date().toISOString()
+    });
+
+    // Emit to shop owner
+    if (shopDoc.owner) {
+      emitToUser(shopDoc.owner.toString(), 'order:new', {
+        orderId: order._id,
+        orderNumber: order.orderNumber,
+        customer: {
+          name: req.user.name
+        },
+        total: order.total,
+        itemsCount: order.items.length,
+        timestamp: new Date().toISOString()
+      });
+
+      // Emit to shop room
+      emitToShop(shopDoc._id.toString(), 'order:new', {
+        orderId: order._id,
+        orderNumber: order.orderNumber,
+        timestamp: new Date().toISOString()
+      });
+    }
+  } catch (error) {
+    console.error('Real-time event emission failed:', error);
+  }
+
   res.status(201).json({
     status: 'success',
     message: 'Order placed successfully',
@@ -371,10 +411,56 @@ const updateOrderStatus = asyncHandler(async (req, res) => {
     console.error('Notification sending failed:', error);
   }
 
+  // Emit real-time events for order tracking
+  try {
+    const statusMessages = {
+      'confirmed': 'Your order has been confirmed',
+      'preparing': 'Your order is being prepared',
+      'ready': 'Your order is ready',
+      'out_for_delivery': 'Your order is out for delivery',
+      'delivered': 'Your order has been delivered',
+      'cancelled': 'Your order has been cancelled'
+    };
+
+    // Emit to order-specific room (for real-time tracking page)
+    emitToOrder(order._id.toString(), 'order:status_update', {
+      orderId: order._id,
+      orderNumber: order.orderNumber,
+      status: order.status,
+      message: statusMessages[status],
+      note: note,
+      timestamp: new Date().toISOString(),
+      updatedBy: {
+        id: req.user.id,
+        name: req.user.name,
+        role: req.user.role
+      }
+    });
+
+    // Emit to customer
+    emitToUser(order.customer._id.toString(), 'order:updated', {
+      orderId: order._id,
+      orderNumber: order.orderNumber,
+      status: order.status,
+      message: statusMessages[status],
+      timestamp: new Date().toISOString()
+    });
+
+    // Emit to shop room (for shop dashboard)
+    emitToShop(order.shop._id.toString(), 'order:status_changed', {
+      orderId: order._id,
+      orderNumber: order.orderNumber,
+      status: order.status,
+      timestamp: new Date().toISOString()
+    });
+  } catch (error) {
+    console.error('Real-time event emission failed:', error);
+  }
+
   res.status(200).json({
     status: 'success',
     message: 'Order status updated successfully',
-    data: { 
+    data: {
       order: {
         _id: order._id,
         orderNumber: order.orderNumber,
@@ -431,6 +517,51 @@ const cancelOrder = asyncHandler(async (req, res) => {
     if (product && product.trackQuantity) {
       await product.releaseStock(item.quantity);
     }
+  }
+
+  // Emit real-time events for order cancellation
+  try {
+    // Emit to order room
+    emitToOrder(order._id.toString(), 'order:cancelled', {
+      orderId: order._id,
+      orderNumber: order.orderNumber,
+      reason: reason,
+      cancelledBy: {
+        id: req.user.id,
+        name: req.user.name,
+        role: req.user.role
+      },
+      timestamp: new Date().toISOString()
+    });
+
+    // Emit to customer if cancelled by shop
+    if (req.user.role !== 'customer') {
+      emitToUser(order.customer._id.toString(), 'order:cancelled', {
+        orderId: order._id,
+        orderNumber: order.orderNumber,
+        reason: reason,
+        message: 'Your order has been cancelled',
+        timestamp: new Date().toISOString()
+      });
+    }
+
+    // Emit to shop if cancelled by customer
+    if (req.user.role === 'customer' && order.shop.owner) {
+      emitToUser(order.shop.owner.toString(), 'order:cancelled_by_customer', {
+        orderId: order._id,
+        orderNumber: order.orderNumber,
+        reason: reason,
+        timestamp: new Date().toISOString()
+      });
+
+      emitToShop(order.shop._id.toString(), 'order:cancelled', {
+        orderId: order._id,
+        orderNumber: order.orderNumber,
+        timestamp: new Date().toISOString()
+      });
+    }
+  } catch (error) {
+    console.error('Real-time event emission failed:', error);
   }
 
   res.status(200).json({

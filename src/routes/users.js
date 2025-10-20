@@ -1,6 +1,8 @@
 const express = require('express');
 const {
   getUsers,
+  getProfile,
+  updateProfile,
   getUserById,
   updateUser,
   deleteUser,
@@ -140,6 +142,51 @@ router.use(protect);
  *         description: Access forbidden
  */
 router.get('/', authorize('admin'), getUsers);
+
+/**
+ * @swagger
+ * /api/users/profile:
+ *   get:
+ *     summary: Get current user's profile
+ *     tags: [Users]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Profile retrieved successfully
+ *       401:
+ *         description: Not authorized
+ *   put:
+ *     summary: Update current user's profile
+ *     tags: [Users]
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               name:
+ *                 type: string
+ *               dateOfBirth:
+ *                 type: string
+ *                 format: date
+ *               gender:
+ *                 type: string
+ *                 enum: [male, female, other]
+ *               preferences:
+ *                 type: object
+ *     responses:
+ *       200:
+ *         description: Profile updated successfully
+ *       400:
+ *         description: Validation error
+ */
+router.route('/profile')
+  .get(getProfile)
+  .put(updateProfile);
 
 /**
  * @swagger

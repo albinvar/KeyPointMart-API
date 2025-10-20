@@ -10,7 +10,9 @@ const {
   verifyEmail,
   verifyPhone,
   resendVerification,
-  logout
+  logout,
+  sendOtp,
+  verifyOtp
 } = require('../controllers/authController');
 const { protect } = require('../middleware/auth');
 const { validate, schemas } = require('../utils/validation');
@@ -142,6 +144,96 @@ router.post('/register', validate(schemas.register), register);
  *         description: Account locked
  */
 router.post('/login', validate(schemas.login), login);
+
+/**
+ * @swagger
+ * /api/auth/send-otp:
+ *   post:
+ *     summary: Send OTP for passwordless login
+ *     tags: [Authentication]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - phone
+ *             properties:
+ *               phone:
+ *                 type: string
+ *                 description: Phone number to send OTP
+ *             example:
+ *               phone: "+919876543210"
+ *     responses:
+ *       200:
+ *         description: OTP sent successfully (in dev mode, OTP is returned in response)
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 status:
+ *                   type: string
+ *                   example: success
+ *                 message:
+ *                   type: string
+ *                   example: OTP sent successfully
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     phone:
+ *                       type: string
+ *                     expiresIn:
+ *                       type: string
+ *                     otp:
+ *                       type: string
+ *                       description: Only available in development mode
+ *       400:
+ *         description: Phone number is required
+ *       404:
+ *         description: User not found
+ */
+router.post('/send-otp', sendOtp);
+
+/**
+ * @swagger
+ * /api/auth/verify-otp:
+ *   post:
+ *     summary: Verify OTP and login (passwordless)
+ *     tags: [Authentication]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - phone
+ *               - otp
+ *             properties:
+ *               phone:
+ *                 type: string
+ *                 description: Phone number
+ *               otp:
+ *                 type: string
+ *                 description: OTP code (use "1234" for development)
+ *             example:
+ *               phone: "+919876543210"
+ *               otp: "1234"
+ *     responses:
+ *       200:
+ *         description: Login successful
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/AuthResponse'
+ *       400:
+ *         description: Phone number and OTP are required
+ *       401:
+ *         description: Invalid or expired OTP
+ */
+router.post('/verify-otp', verifyOtp);
 
 /**
  * @swagger

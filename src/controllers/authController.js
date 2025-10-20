@@ -502,6 +502,153 @@ const logout = asyncHandler(async (req, res) => {
   });
 });
 
+// @desc    Send OTP for login
+// @route   POST /api/auth/send-otp
+// @access  Public
+const sendOtp = asyncHandler(async (req, res) => {
+  const { phone } = req.body;
+
+  if (!phone) {
+    return res.status(400).json({
+      status: 'error',
+      message: 'Phone number is required'
+    });
+  }
+
+  // Find user by phone
+  const user = await User.findOne({ phone });
+
+  if (!user) {
+    return res.status(404).json({
+      status: 'error',
+      message: 'User not found with this phone number'
+    });
+  }
+
+  // Check if account is active
+  if (!user.isActive) {
+    return res.status(403).json({
+      status: 'error',
+      message: 'Account is deactivated'
+    });
+  }
+
+  // Generate OTP - hardcoded as "1234" for development
+  const otp = '1234';
+
+  // Store OTP with 5 minute expiry
+  user.loginOtp = otp;
+  user.loginOtpExpire = Date.now() + 5 * 60 * 1000; // 5 minutes
+  await user.save();
+
+  // In production, send OTP via SMS
+  try {
+    if (process.env.NODE_ENV === 'production') {
+      await sendSMS({
+        to: phone,
+        message: `Your KeyPointMart login OTP is: ${otp}. Valid for 5 minutes.`
+      });
+    }
+  } catch (error) {
+    console.log('SMS sending failed:', error.message);
+  }
+
+  res.status(200).json({
+    status: 'success',
+    message: 'OTP sent successfully',
+    data: {
+      phone,
+      expiresIn: '5 minutes',
+      // Only show OTP in development mode
+      ...(process.env.NODE_ENV === 'development' && { otp })
+    }
+  });
+});
+
+// @desc    Verify OTP and login
+// @route   POST /api/auth/verify-otp
+// @access  Public
+const verifyOtp = asyncHandler(async (req, res) => {
+  const { phone, otp } = req.body;
+
+  if (!phone || !otp) {
+    return res.status(400).json({
+      status: 'error',
+      message: 'Phone number and OTP are required'
+    });
+  }
+
+  // Find user by phone and valid OTP
+  const user = await User.findOne({
+    phone,
+    loginOtp: otp,
+    loginOtpExpire: { $gt: Date.now() }
+  });
+
+  if (!user) {
+    return res.status(401).json({
+      status: 'error',
+      message: 'Invalid or expired OTP'
+    });
+  }
+
+  // Check if account is active
+  if (!user.isActive) {
+    return res.status(403).json({
+      status: 'error',
+      message: 'Account is deactivated'
+    });
+  }
+
+  // Clear OTP after successful verification
+  user.loginOtp = undefined;
+  user.loginOtpExpire = undefined;
+
+  // Mark phone as verified if not already
+  if (!user.isPhoneVerified) {
+    user.isPhoneVerified = true;
+  }
+
+  // Update last login
+  user.lastLogin = new Date();
+  await user.save();
+
+  // Generate JWT token
+  const token = user.getSignedJwtToken();
+
+  // Get shop info if shop owner
+  let shopInfo = null;
+  if (user.role === 'shop_owner') {
+    const shop = await Shop.findOne({ owner: user._id }).select('_id businessName verification');
+    if (shop) {
+      shopInfo = {
+        id: shop._id,
+        businessName: shop.businessName,
+        verificationStatus: shop.verification.status
+      };
+    }
+  }
+
+  res.status(200).json({
+    status: 'success',
+    message: 'Login successful',
+    data: {
+      user: {
+        id: user._id,
+        name: user.name,
+        email: user.email,
+        phone: user.phone,
+        role: user.role,
+        isEmailVerified: user.isEmailVerified,
+        isPhoneVerified: user.isPhoneVerified,
+        lastLogin: user.lastLogin
+      },
+      shop: shopInfo,
+      token
+    }
+  });
+});
+
 module.exports = {
   register,
   login,
@@ -513,5 +660,7 @@ module.exports = {
   verifyEmail,
   verifyPhone,
   resendVerification,
-  logout
+  logout,
+  sendOtp,
+  verifyOtp
 };

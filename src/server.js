@@ -1,4 +1,5 @@
 const express = require('express');
+const http = require('http');
 const cors = require('cors');
 const helmet = require('helmet');
 const morgan = require('morgan');
@@ -9,6 +10,7 @@ const swaggerUi = require('swagger-ui-express');
 const connectDB = require('./config/database');
 const config = require('./config/config');
 const { errorHandler } = require('./middleware/errorHandler');
+const { initializeSocket } = require('./config/socket');
 
 // Route imports
 const authRoutes = require('./routes/auth');
@@ -19,15 +21,35 @@ const orderRoutes = require('./routes/orders');
 const shopRoutes = require('./routes/shops');
 const paymentRoutes = require('./routes/payments');
 const locationRoutes = require('./routes/location');
+const cartRoutes = require('./routes/cart');
 
 const app = express();
+const server = http.createServer(app);
 
 // Connect to database
 connectDB();
 
+// Initialize Socket.io
+initializeSocket(server);
+
 // Security middleware
-app.use(helmet());
-app.use(cors());
+// Configure helmet for development - disable strict policies that require HTTPS
+app.use(helmet({
+  contentSecurityPolicy: false,
+  crossOriginEmbedderPolicy: false,
+  crossOriginOpenerPolicy: false,
+  crossOriginResourcePolicy: false,
+  originAgentCluster: false,
+  strictTransportSecurity: false
+}));
+
+// CORS configuration
+app.use(cors({
+  origin: '*',
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization'],
+  credentials: true
+}));
 
 // Rate limiting
 const limiter = rateLimit({
@@ -64,8 +86,12 @@ const swaggerOptions = {
     },
     servers: [
       {
+        url: `http://100.100.22.22:${config.port}`,
+        description: 'Tailscale Development server',
+      },
+      {
         url: `http://localhost:${config.port}`,
-        description: 'Development server',
+        description: 'Local Development server',
       },
     ],
     components: {
@@ -82,7 +108,18 @@ const swaggerOptions = {
 };
 
 const swaggerSpecs = swaggerJsdoc(swaggerOptions);
-app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpecs));
+
+// Swagger UI options - disable HTTPS enforcement
+const swaggerUiOptions = {
+  explorer: true,
+  swaggerOptions: {
+    persistAuthorization: true,
+    displayRequestDuration: true,
+  },
+  customSiteTitle: 'KeyPointMart API Docs',
+};
+
+app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpecs, swaggerUiOptions));
 
 // Health check endpoint
 app.get('/health', (req, res) => {
@@ -103,6 +140,7 @@ app.use('/api/orders', orderRoutes);
 app.use('/api/shops', shopRoutes);
 app.use('/api/payments', paymentRoutes);
 app.use('/api/location', locationRoutes);
+app.use('/api/cart', cartRoutes);
 
 // Handle undefined routes
 app.all('*', (req, res) => {
@@ -117,14 +155,15 @@ app.use(errorHandler);
 
 const PORT = config.port;
 
-app.listen(PORT, () => {
+server.listen(PORT, () => {
   console.log(`
 🚀 KeyPointMart API Server is running!
 📍 Server: http://localhost:${PORT}
 📚 API Documentation: http://localhost:${PORT}/api-docs
 🏥 Health Check: http://localhost:${PORT}/health
+🔌 WebSocket: Available
 🌍 Environment: ${config.nodeEnv}
   `);
 });
 
-module.exports = app;
+module.exports = { app, server };

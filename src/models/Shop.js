@@ -283,8 +283,7 @@ const shopSchema = new mongoose.Schema({
   toObject: { virtuals: true }
 });
 
-// Indexes
-shopSchema.index({ slug: 1 });
+// Indexes (slug already has unique index from schema)
 shopSchema.index({ owner: 1 });
 shopSchema.index({ businessType: 1 });
 shopSchema.index({ 'address.pincode': 1 });
@@ -322,15 +321,15 @@ shopSchema.pre('save', function(next) {
 // Check if shop is currently open
 shopSchema.methods.isCurrentlyOpen = function() {
   const now = new Date();
-  const currentDay = now.toLocaleDateString('en-US', { weekday: 'lowercase' });
+  const currentDay = now.toLocaleDateString('en-US', { weekday: 'long' }).toLowerCase();
   const currentTime = now.toTimeString().slice(0, 5);
-  
+
   const todayHours = this.businessHours.find(h => h.day === currentDay);
-  
+
   if (!todayHours || !todayHours.isOpen) {
     return false;
   }
-  
+
   return currentTime >= todayHours.openTime && currentTime <= todayHours.closeTime;
 };
 

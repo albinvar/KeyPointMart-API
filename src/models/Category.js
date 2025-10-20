@@ -95,8 +95,7 @@ const categorySchema = new mongoose.Schema({
   toObject: { virtuals: true }
 });
 
-// Indexes
-categorySchema.index({ slug: 1 });
+// Indexes (slug already has unique index from schema)
 categorySchema.index({ parent: 1 });
 categorySchema.index({ isActive: 1 });
 categorySchema.index({ isFeatured: 1 });

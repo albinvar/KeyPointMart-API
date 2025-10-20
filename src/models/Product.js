@@ -292,8 +292,7 @@ const productSchema = new mongoose.Schema({
   toObject: { virtuals: true }
 });
 
-// Indexes
-productSchema.index({ slug: 1 });
+// Indexes (slug already has unique index from schema)
 productSchema.index({ shop: 1 });
 productSchema.index({ category: 1 });
 productSchema.index({ price: 1 });

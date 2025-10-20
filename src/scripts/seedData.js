@@ -1,6 +1,5 @@
 require('dotenv').config();
 const mongoose = require('mongoose');
-const bcrypt = require('bcryptjs');
 
 // Import models
 const User = require('../models/User');
@@ -14,10 +13,7 @@ const Review = require('../models/Review');
 // Connect to MongoDB
 const connectDB = async () => {
   try {
-    await mongoose.connect(process.env.MONGODB_URI || 'mongodb://localhost:27017/keypointmart', {
-      useNewUrlParser: true,
-      useUnifiedTopology: true,
-    });
+    await mongoose.connect(process.env.MONGODB_URI || 'mongodb://localhost:27017/keypointmart');
     console.log('MongoDB Connected for seeding...');
   } catch (error) {
     console.error('Database connection failed:', error);
@@ -49,7 +45,7 @@ const seedUsers = async () => {
       name: 'KeyPointMart Admin',
       email: 'admin@keypointmart.com',
       phone: '+919876543210',
-      password: await bcrypt.hash('admin123', 12),
+      password: 'admin123', // Will be hashed by User model pre-save hook
       role: 'admin',
       isEmailVerified: true,
       isPhoneVerified: true,
@@ -60,7 +56,7 @@ const seedUsers = async () => {
       name: 'Rajesh Electronics',
       email: 'rajesh@electronics.com',
       phone: '+919876543211',
-      password: await bcrypt.hash('password123', 12),
+      password: 'password123', // Will be hashed by User model pre-save hook
       role: 'shop_owner',
       isEmailVerified: true,
       isPhoneVerified: true,
@@ -70,7 +66,7 @@ const seedUsers = async () => {
       name: 'Priya Fashions',
       email: 'priya@fashions.com',
       phone: '+919876543212',
-      password: await bcrypt.hash('password123', 12),
+      password: 'password123', // Will be hashed by User model pre-save hook
       role: 'shop_owner',
       isEmailVerified: true,
       isPhoneVerified: true,
@@ -80,7 +76,7 @@ const seedUsers = async () => {
       name: 'Ahmed Restaurant',
       email: 'ahmed@restaurant.com',
       phone: '+919876543213',
-      password: await bcrypt.hash('password123', 12),
+      password: 'password123', // Will be hashed by User model pre-save hook
       role: 'shop_owner',
       isEmailVerified: true,
       isPhoneVerified: true,
@@ -90,7 +86,7 @@ const seedUsers = async () => {
       name: 'Sita Grocery Store',
       email: 'sita@grocery.com',
       phone: '+919876543214',
-      password: await bcrypt.hash('password123', 12),
+      password: 'password123', // Will be hashed by User model pre-save hook
       role: 'shop_owner',
       isEmailVerified: true,
       isPhoneVerified: true,
@@ -101,7 +97,7 @@ const seedUsers = async () => {
       name: 'John Smith',
       email: 'john@example.com',
       phone: '+919876543215',
-      password: await bcrypt.hash('password123', 12),
+      password: 'password123', // Will be hashed by User model pre-save hook
       role: 'customer',
       isEmailVerified: true,
       isPhoneVerified: true,
@@ -113,7 +109,7 @@ const seedUsers = async () => {
       name: 'Sarah Johnson',
       email: 'sarah@example.com',
       phone: '+919876543216',
-      password: await bcrypt.hash('password123', 12),
+      password: 'password123', // Will be hashed by User model pre-save hook
       role: 'customer',
       isEmailVerified: true,
       isPhoneVerified: true,
@@ -125,7 +121,7 @@ const seedUsers = async () => {
       name: 'Michael Brown',
       email: 'michael@example.com',
       phone: '+919876543217',
-      password: await bcrypt.hash('password123', 12),
+      password: 'password123', // Will be hashed by User model pre-save hook
       role: 'customer',
       isEmailVerified: true,
       isPhoneVerified: true,
@@ -137,7 +133,7 @@ const seedUsers = async () => {
       name: 'Emily Davis',
       email: 'emily@example.com',
       phone: '+919876543218',
-      password: await bcrypt.hash('password123', 12),
+      password: 'password123', // Will be hashed by User model pre-save hook
       role: 'customer',
       isEmailVerified: true,
       isPhoneVerified: true,

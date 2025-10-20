@@ -81,6 +81,93 @@ const getUsers = asyncHandler(async (req, res) => {
   });
 });
 
+// @desc    Get current user profile
+// @route   GET /api/users/profile
+// @access  Private
+const getProfile = asyncHandler(async (req, res) => {
+  const user = await User.findById(req.user.id)
+    .select('-password -resetPasswordToken -emailVerificationToken -phoneVerificationToken')
+    .populate('addresses defaultAddress');
+
+  if (!user) {
+    return res.status(404).json({
+      status: 'error',
+      message: 'User not found'
+    });
+  }
+
+  // Get additional data based on user role
+  let additionalData = {};
+
+  if (user.role === 'shop_owner') {
+    const shop = await Shop.findOne({ owner: user._id });
+    if (shop) {
+      additionalData.shop = shop;
+    }
+  }
+
+  if (user.role === 'customer') {
+    const orderStats = await Order.aggregate([
+      { $match: { customer: user._id } },
+      {
+        $group: {
+          _id: null,
+          totalOrders: { $sum: 1 },
+          totalSpent: { $sum: '$total' },
+          averageOrderValue: { $avg: '$total' }
+        }
+      }
+    ]);
+
+    additionalData.orderStats = orderStats[0] || {
+      totalOrders: 0,
+      totalSpent: 0,
+      averageOrderValue: 0
+    };
+  }
+
+  res.status(200).json({
+    status: 'success',
+    data: {
+      user,
+      ...additionalData
+    }
+  });
+});
+
+// @desc    Update current user profile
+// @route   PUT /api/users/profile
+// @access  Private
+const updateProfile = asyncHandler(async (req, res) => {
+  const allowedFields = ['name', 'dateOfBirth', 'gender', 'preferences'];
+  const fieldsToUpdate = {};
+
+  allowedFields.forEach(field => {
+    if (req.body[field] !== undefined) {
+      fieldsToUpdate[field] = req.body[field];
+    }
+  });
+
+  const updatedUser = await User.findByIdAndUpdate(
+    req.user.id,
+    fieldsToUpdate,
+    { new: true, runValidators: true }
+  ).select('-password -resetPasswordToken -emailVerificationToken -phoneVerificationToken');
+
+  if (!updatedUser) {
+    return res.status(404).json({
+      status: 'error',
+      message: 'User not found'
+    });
+  }
+
+  res.status(200).json({
+    status: 'success',
+    message: 'Profile updated successfully',
+    data: { user: updatedUser }
+  });
+});
+
 // @desc    Get user by ID
 // @route   GET /api/users/:id
 // @access  Private/Admin or Own Profile
@@ -522,6 +609,8 @@ const getUserStats = asyncHandler(async (req, res) => {
 
 module.exports = {
   getUsers,
+  getProfile,
+  updateProfile,
   getUserById,
   updateUser,
   deleteUser,

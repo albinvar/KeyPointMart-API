@@ -8,12 +8,13 @@ services:
     container_name: keypointmart-api
     restart: unless-stopped
     ports:
-      - "3000:3000"
+      - "100.100.22.22:3000:3000"
     environment:
       - NODE_ENV=development
       - MONGODB_URI=mongodb://mongo:27017/keypointmart
       - JWT_SECRET=keypointmart-jwt-secret-key-2024
       - PORT=3000
+      - HOST=100.100.22.22
     depends_on:
       - mongo
     volumes:
@@ -27,7 +28,7 @@ services:
     container_name: keypointmart-mongo
     restart: unless-stopped
     ports:
-      - "27017:27017"
+      - "100.100.22.22:27017:27017"
     environment:
       - MONGO_INITDB_DATABASE=keypointmart
     volumes:
@@ -41,7 +42,7 @@ services:
     container_name: keypointmart-mongo-express
     restart: unless-stopped
     ports:
-      - "8081:8081"
+      - "100.100.22.22:8081:8081"
     environment:
       - ME_CONFIG_MONGODB_SERVER=mongo
       - ME_CONFIG_MONGODB_PORT=27017

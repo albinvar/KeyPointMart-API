@@ -72,7 +72,11 @@ const userSchema = new mongoose.Schema({
   // Password reset fields
   resetPasswordToken: String,
   resetPasswordExpire: Date,
-  
+
+  // OTP login fields
+  loginOtp: String,
+  loginOtpExpire: Date,
+
   // Account status
   isActive: {
     type: Boolean,
@@ -124,9 +128,7 @@ const userSchema = new mongoose.Schema({
   toObject: { virtuals: true }
 });
 
-// Indexes
-userSchema.index({ email: 1 });
-userSchema.index({ phone: 1 });
+// Indexes (email and phone already have unique indexes from schema)
 userSchema.index({ role: 1 });
 userSchema.index({ isActive: 1 });
 

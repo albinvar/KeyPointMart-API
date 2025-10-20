@@ -157,39 +157,44 @@ const isWithinDeliveryRadius = (shopCoords, customerCoords, radiusKm) => {
   return distance <= radiusKm;
 };
 
-// Get nearby shops using MongoDB geospatial query
+// Get nearby shops using manual distance calculation
 const findNearbyShops = async (Shop, coordinates, radiusKm = 10, filters = {}) => {
+  // Query all active, verified shops
   const query = {
-    'address.coordinates': {
-      $near: {
-        $geometry: {
-          type: 'Point',
-          coordinates: [coordinates.longitude, coordinates.latitude]
-        },
-        $maxDistance: radiusKm * 1000 // Convert km to meters
-      }
-    },
     isActive: true,
     'verification.status': 'verified',
+    'address.coordinates.latitude': { $exists: true },
+    'address.coordinates.longitude': { $exists: true },
     ...filters
   };
 
   try {
-    const shops = await Shop.find(query).limit(50);
-    
-    // Add calculated distance to each shop
-    return shops.map(shop => {
+    const allShops = await Shop.find(query);
+
+    // Manually calculate distance and filter by radius
+    const shopsWithDistance = allShops.map(shop => {
       const distance = calculateDistance(
         coordinates.latitude,
         coordinates.longitude,
         shop.address.coordinates.latitude,
         shop.address.coordinates.longitude
       );
-      
+
       return {
-        ...shop.toObject(),
-        distance: Math.round(distance * 100) / 100, // Round to 2 decimal places
-        estimatedDeliveryTime: calculateDeliveryTime(distance, shop.settings.preparationTime || 30)
+        shop,
+        distance
+      };
+    })
+    .filter(item => item.distance <= radiusKm)
+    .sort((a, b) => a.distance - b.distance)
+    .slice(0, 50); // Limit to 50 results
+
+    // Return shops with distance information
+    return shopsWithDistance.map(item => {
+      return {
+        ...item.shop.toObject(),
+        distance: Math.round(item.distance * 100) / 100, // Round to 2 decimal places
+        estimatedDeliveryTime: calculateDeliveryTime(item.distance, item.shop.settings.preparationTime || 30)
       };
     });
   } catch (error) {
