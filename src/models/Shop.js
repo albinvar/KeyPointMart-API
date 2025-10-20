@@ -204,6 +204,20 @@ const shopSchema = new mongoose.Schema({
       default: 30,
       min: 5
     },
+    maxOrdersPerHour: {
+      type: Number,
+      default: null, // null = unlimited
+      min: 1
+    },
+    maxActiveOrders: {
+      type: Number,
+      default: null, // null = unlimited
+      min: 1
+    },
+    pauseOrdersUntil: {
+      type: Date,
+      default: null
+    },
 
     // Delivery Settings
     deliveryFee: {

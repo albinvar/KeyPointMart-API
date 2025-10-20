@@ -73,6 +73,46 @@ const createOrder = asyncHandler(async (req, res) => {
     });
   }
 
+  // Check if orders are paused
+  if (shopDoc.settings.pauseOrdersUntil && new Date(shopDoc.settings.pauseOrdersUntil) > new Date()) {
+    const pausedUntil = new Date(shopDoc.settings.pauseOrdersUntil).toLocaleString();
+    return res.status(400).json({
+      status: 'error',
+      message: `Shop is temporarily not accepting orders until ${pausedUntil}`
+    });
+  }
+
+  // Check max active orders limit
+  if (shopDoc.settings.maxActiveOrders) {
+    const activeOrdersCount = await Order.countDocuments({
+      shop: shopDoc._id,
+      status: { $in: ['pending', 'confirmed', 'preparing', 'ready', 'out_for_delivery'] }
+    });
+
+    if (activeOrdersCount >= shopDoc.settings.maxActiveOrders) {
+      return res.status(400).json({
+        status: 'error',
+        message: 'Shop is currently at full capacity. Please try again later.'
+      });
+    }
+  }
+
+  // Check max orders per hour limit
+  if (shopDoc.settings.maxOrdersPerHour) {
+    const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000);
+    const recentOrdersCount = await Order.countDocuments({
+      shop: shopDoc._id,
+      createdAt: { $gte: oneHourAgo }
+    });
+
+    if (recentOrdersCount >= shopDoc.settings.maxOrdersPerHour) {
+      return res.status(400).json({
+        status: 'error',
+        message: 'Shop has reached its order capacity for this hour. Please try again later.'
+      });
+    }
+  }
+
   // Calculate fees and total
   let deliveryFee = 0;
   if (delivery.type === 'delivery') {
@@ -111,6 +151,9 @@ const createOrder = asyncHandler(async (req, res) => {
   }
 
   // Create order
+  // Auto-accept if enabled
+  const initialStatus = shopDoc.settings.autoAcceptOrders ? 'confirmed' : 'pending';
+
   const orderData = {
     customer: req.user.id,
     shop: shopDoc._id,
@@ -119,7 +162,7 @@ const createOrder = asyncHandler(async (req, res) => {
     deliveryFee,
     tax,
     total,
-    status: 'pending',
+    status: initialStatus,
     delivery: {
       type: delivery.type,
       address: deliveryAddress,
@@ -139,6 +182,16 @@ const createOrder = asyncHandler(async (req, res) => {
   };
 
   const order = await Order.create(orderData);
+
+  // Add status history entry
+  if (initialStatus === 'confirmed') {
+    order.statusHistory.push({
+      status: 'confirmed',
+      timestamp: new Date(),
+      note: 'Order automatically confirmed'
+    });
+    await order.save();
+  }
 
   // Reserve stock for products
   try {
